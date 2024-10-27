@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 # URL do banco de dados retirada das variáveis de ambiente
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:root@localhost:5432/agrbackend-dev2")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:root@localhost:5432/agrbackend-dev3")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

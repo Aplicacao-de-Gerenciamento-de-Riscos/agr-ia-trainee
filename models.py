@@ -48,6 +48,8 @@ class Worklog(Base):
     # Relacionamento com issues
     issues = relationship("Issue", back_populates="worklog")
 
+    # Relacionamento com worklog entries
+    entries = relationship("WorklogEntry", back_populates="worklog")
 
 # Tabela: tb_worklog_entry
 class WorklogEntry(Base):
@@ -93,7 +95,9 @@ class Version(Base):
 
     # Relacionamento com projeto
     project = relationship("Project", back_populates="versions")
-    version_issues = relationship("VersionIssue", back_populates="version")
+
+    # Relacionamento com issues através de VersionIssue
+    issues = relationship("Issue", secondary="tb_version_issue", back_populates="versions")
 
 
 # Tabela: tb_issue
@@ -125,6 +129,9 @@ class Issue(Base):
     sprint = relationship("Sprint", back_populates="issues")
     worklog = relationship("Worklog", back_populates="issues")
 
+    # Relacionamento com versões através de VersionIssue
+    versions = relationship("Version", secondary="tb_version_issue", back_populates="issues")
+
 
 # Tabela: tb_version_issue (tabela de relacionamento)
 class VersionIssue(Base):
@@ -135,6 +142,3 @@ class VersionIssue(Base):
     cod_version = Column(BigInteger, ForeignKey('tb_version.cod_version'))
     cod_issue = Column(BigInteger, ForeignKey('tb_issue.cod_issue'))
 
-    # Relacionamentos
-    version = relationship("Version", back_populates="version_issues")
-    issue = relationship("Issue")
