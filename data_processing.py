@@ -17,12 +17,6 @@ def load_data(db: Session):
                     project_sprint_map[project.cod_project] = []
                 project_sprint_map[project.cod_project].append(sprint)
 
-    # Printar o mapeamento de projetos para sprints
-    # for project in project_sprint_map:
-    #     print(f"Project {project}:")
-    #     for sprint in project_sprint_map[project]:
-    #         print(f"  - Sprint {sprint.cod_sprint}: {sprint.name}")
-
     # Carregar todas as issues e suas relações com sprints, versões e projetos
     issues = (db.query(Issue)
                 .join(Sprint, Issue.cod_sprint == Sprint.cod_sprint)  # Relaciona Issues com Sprints

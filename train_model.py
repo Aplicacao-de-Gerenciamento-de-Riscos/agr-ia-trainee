@@ -81,6 +81,9 @@ def train_and_evaluate_models():
     X = data_df.drop(columns=['cod_version', 'cod_project'])
     y = (data_df['timespent'] > data_df['time_original_estimate']).astype(int)
 
+    # mostrar todos os cod_version
+    print(data_df['cod_version'].unique())
+
     # Dividir dados em treino e teste
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
