@@ -9,3 +9,4 @@ python-dotenv
 scipy~=1.14.1
 xgboost~=2.1.2
 optuna~=4.0.0
+openpyxl

@@ -55,13 +55,13 @@ def load_data(db: Session):
     }).reset_index()
 
     # Remover coluna de épico que só possuem valores em uma linha
-    # Buscar colunas de épico
-    epic_cols = [col for col in version_data.columns if col.startswith('cod_epic_')]
-
-    # Iterar sobre as colunas de épico e verificar em quantas linhas o valor é > 0
-    for col in epic_cols:
-        if version_data[col].gt(0).sum() < 2:
-            # Remover a coluna caso só tenha 1 ou 0 ocorrências
-            version_data.drop(columns=[col], inplace=True)
+    # # Buscar colunas de épico
+    # epic_cols = [col for col in version_data.columns if col.startswith('cod_epic_')]
+    #
+    # # Iterar sobre as colunas de épico e verificar em quantas linhas o valor é > 0
+    # for col in epic_cols:
+    #     if version_data[col].gt(0).sum() < 2:
+    #         # Remover a coluna caso só tenha 1 ou 0 ocorrências
+    #         version_data.drop(columns=[col], inplace=True)
 
     return version_data

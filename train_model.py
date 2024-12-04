@@ -1,4 +1,5 @@
 # train_and_tune_models.py
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -8,6 +9,10 @@ import pandas as pd
 import optuna
 from data_processing import load_data
 from database import get_db
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from imblearn.over_sampling import SMOTE
 
 
 def hyperparameter_tuning(model, param_grid, X_train, y_train):
@@ -62,13 +67,7 @@ def predict_delay(model, version_data, epic_feature_names, threshold=0.5):
     probability_of_delay = model.predict_proba(version_data)[:, 1]  # Probabilidade da classe de atraso
     delay_risk_percentage = probability_of_delay.mean() * 100  # Percentual médio de risco de atraso
 
-    # 2. Obtenha a importância das features e identifique os épicos mais impactantes
-    feature_importances = model.feature_importances_
-    epic_importances = {epic: feature_importances[i] for i, epic in enumerate(epic_feature_names)}
-    sorted_epics = sorted(epic_importances.items(), key=lambda x: x[1], reverse=True)
-    top_impacting_epics = [epic for epic, _ in sorted_epics[:5]]  # Top 5 épicos mais impactantes
-
-    return delay_risk_percentage, top_impacting_epics
+    return delay_risk_percentage
 
 
 def train_and_evaluate_models():
@@ -77,17 +76,24 @@ def train_and_evaluate_models():
     data = load_data(db)
     data_df = pd.DataFrame(data)
 
+    # Exportar os dados para um arquivo xlsx
+    data_df.to_excel('data.xlsx', index=False)
+
     # Definir variáveis preditoras e variável target
     X = data_df.drop(columns=['cod_version', 'cod_project'])
     y = (data_df['timespent'] > data_df['time_original_estimate']).astype(int)
 
-    # mostrar todos os cod_version
-    print(data_df['cod_version'].unique())
-
     # Dividir dados em treino e teste
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
 
-    # Definir modelos e parâmetros de ajuste para RandomForest e GradientBoosting
+    # Aplicar SMOTE para lidar com o desbalanceamento
+    smote = SMOTE(k_neighbors=4, random_state=42)
+    X_train, y_train = smote.fit_resample(X_train, y_train)
+
+    # Balanceamento no XGBoost
+    scale_pos_weight = y_train.value_counts()[0] / y_train.value_counts()[1]
+
+    # Treinar e avaliar RandomForest e GradientBoosting com GridSearchCV
     models_params = {
         "Random Forest": {
             "model": RandomForestClassifier(random_state=42),
@@ -107,38 +113,45 @@ def train_and_evaluate_models():
         }
     }
 
-    # Treinar e avaliar cada modelo com GridSearchCV
     for model_name, mp in models_params.items():
-        print(f"\nTreinando e ajustando o modelo {model_name}...")
-
-        # Ajuste de hiperparâmetros
         best_model = hyperparameter_tuning(mp['model'], mp['params'], X_train, y_train)
-
-        # Avaliação do modelo
         y_pred = best_model.predict(X_test)
         print(f"\nModelo Tunado: {model_name}")
         print("Acurácia:", accuracy_score(y_test, y_pred))
         print("Relatório de Classificação:\n", classification_report(y_test, y_pred, zero_division=1))
 
-        # Salvar o melhor modelo
-        model_filename = f'tuned_{model_name.lower().replace(" ", "_")}_model.joblib'
-        joblib.dump(best_model, model_filename)
-        print(f"Modelo {model_name} salvo como '{model_filename}'.")
+    # Treinar e avaliar XGBoost com otimização
+    def xgboost_objective(trial):
+        params = {
+            'objective': 'binary:logistic',
+            'scale_pos_weight': scale_pos_weight,
+            'eval_metric': 'logloss',
+            'use_label_encoder': False,
+            'learning_rate': trial.suggest_loguniform('learning_rate', 0.01, 0.3),
+            'max_depth': trial.suggest_int('max_depth', 3, 10),
+            'gamma': trial.suggest_float('gamma', 0, 5),
+            'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
+            'subsample': trial.suggest_float('subsample', 0.5, 1),
+            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1),
+            'lambda': trial.suggest_loguniform('lambda', 1e-3, 1),
+            'alpha': trial.suggest_loguniform('alpha', 1e-3, 1),
+            'n_estimators': trial.suggest_int('n_estimators', 50, 300)
+        }
+        model = XGBClassifier(**params)
+        model.fit(X_train, y_train)
+        preds = model.predict(X_train)
+        return accuracy_score(y_train, preds)
 
-    # Otimização avançada para XGBoost com Optuna
-    print("\nTreinando e ajustando o modelo XGBoost com Otimização Bayesiana...")
-    best_xgb_model = xgboost_optimization(X_train, y_train)
-
-    # Avaliação do modelo XGBoost otimizado
+    study = optuna.create_study(direction="maximize")
+    study.optimize(xgboost_objective, n_trials=50)
+    best_xgb_params = study.best_params
+    best_xgb_params['scale_pos_weight'] = scale_pos_weight
+    best_xgb_model = XGBClassifier(**best_xgb_params)
     best_xgb_model.fit(X_train, y_train)
     y_pred_xgb = best_xgb_model.predict(X_test)
     print("\nModelo Tunado: XGBoost")
     print("Acurácia:", accuracy_score(y_test, y_pred_xgb))
     print("Relatório de Classificação:\n", classification_report(y_test, y_pred_xgb, zero_division=1))
-
-    # Salvar o melhor modelo XGBoost
-    joblib.dump(best_xgb_model, 'tuned_xgboost_model.joblib')
-    print("Modelo XGBoost salvo como 'tuned_xgboost_model.joblib'.")
 
 
 if __name__ == "__main__":
